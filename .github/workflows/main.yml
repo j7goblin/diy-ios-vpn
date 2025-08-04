@@ -1,0 +1,56 @@
+name: "Build"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+jobs:
+  main:
+    runs-on: macos-15
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # flutter-version: 3.19.0
+      - run: |
+          flutter pub get
+
+      - run: |
+          # make build-ios # require an Account
+          
+          # flutter build ios --simulator
+          flutter build ios --release --no-codesign
+          zip -r build.zip build
+
+          mkdir -p Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          zip -r Payload.ipa Payload
+
+      # Create release
+      - name: Generate release tag
+        id: tag
+        run: |
+          sudo systemsetup -settimezone Asia/Ho_Chi_Minh
+          # Get date from Google and reformat for macOS date command
+          http_date=$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep Date: | cut -d' ' -f5-8)
+          macos_date=$(date -jf "%d %b %Y" "$http_date" +"%m%d%H%M%Y")
+          sudo date $macos_date
+          echo "release_tag=ActionBuild_$(date +"%Y.%m.%d_%H-%M-%S")" >> $GITHUB_OUTPUT
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          files: |
+            ./build.zip
+            ./Payload.ipa
+      # Done release
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
